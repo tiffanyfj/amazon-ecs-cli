@@ -14,6 +14,8 @@
 package ecs
 
 import (
+	"fmt"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/amazon-ecs-cli/ecs-cli/modules/compose/ecs/utils"
 	"github.com/docker/libcompose/config"
@@ -148,6 +150,7 @@ func (p *ecsProject) Start() error {
 }
 
 func (p *ecsProject) Up() error {
+	fmt.Println("project.go - Up()")
 	return p.entity.Up()
 }
 

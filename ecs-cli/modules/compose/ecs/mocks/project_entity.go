@@ -17,6 +17,8 @@
 package mock_ecs
 
 import (
+	"fmt"
+
 	ecs "github.com/aws/amazon-ecs-cli/ecs-cli/modules/compose/ecs"
 	utils "github.com/aws/amazon-ecs-cli/ecs-cli/utils"
 	cache "github.com/aws/amazon-ecs-cli/ecs-cli/utils/cache"
@@ -176,6 +178,7 @@ func (_mr *_MockProjectEntityRecorder) TaskDefinitionCache() *gomock.Call {
 }
 
 func (_m *MockProjectEntity) Up() error {
+	fmt.Println("project_entity.go - Up()")
 	ret := _m.ctrl.Call(_m, "Up")
 	ret0, _ := ret[0].(error)
 	return ret0

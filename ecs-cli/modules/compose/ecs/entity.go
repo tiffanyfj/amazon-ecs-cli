@@ -72,6 +72,8 @@ func getOrCreateTaskDefinition(entity ProjectEntity) (*ecs.TaskDefinition, error
 		"TaskDefinition": taskDefinition,
 	}).Debug("Finding task definition in cache or creating if needed")
 
+	fmt.Println(taskDefinition)
+
 	resp, err := entity.Context().ECSClient.RegisterTaskDefinitionIfNeeded(&ecs.RegisterTaskDefinitionInput{
 		Family:               taskDefinition.Family,
 		ContainerDefinitions: taskDefinition.ContainerDefinitions,

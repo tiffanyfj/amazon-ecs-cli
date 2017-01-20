@@ -372,7 +372,9 @@ func Parse(flags *pflag.FlagSet, copts *ContainerOptions) (*container.Config, *c
 	// Can't evaluate options passed into --tmpfs until we actually mount
 	tmpfs := make(map[string]string)
 	for _, t := range copts.tmpfs.GetAll() {
+		fmt.Println("parse.go | ", t)
 		if arr := strings.SplitN(t, ":", 2); len(arr) > 1 {
+			fmt.Println("parse.go | ", arr[1])
 			tmpfs[arr[0]] = arr[1]
 		} else {
 			tmpfs[arr[0]] = ""
@@ -941,6 +943,7 @@ func validatePath(val string, validator func(string) bool) (string, error) {
 // Therefore, a driver letter can only follow either a `:` or `\\`
 // This allows to correctly split strings such as `C:\foo:D:\:rw` or `/tmp/q:/foo`.
 func volumeSplitN(raw string, n int) []string {
+	fmt.Println("parse.go - VolumeSplitN")
 	var array []string
 	if len(raw) == 0 || raw[0] == ':' {
 		// invalid

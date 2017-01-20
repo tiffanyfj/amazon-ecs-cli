@@ -99,6 +99,7 @@ func (s *Service) Sleeper() *utils.TimeSleeper {
 // TaskDefinition returns the task definition object that was created by
 // transforming the Service Configs to ECS acceptable format
 func (s *Service) TaskDefinition() *ecs.TaskDefinition {
+	fmt.Println("service.go - TaskDefinition()")
 	return s.taskDef
 }
 
@@ -150,6 +151,7 @@ func (s *Service) Start() error {
 // If the compose file had changed, it would update the service with the new task definition
 // by calling UpdateService with the new task definition
 func (s *Service) Up() error {
+	fmt.Println("service.go - Up()")
 	// describe service to get the task definition and count running
 	ecsService, err := s.describeService()
 	var missingServiceErr bool

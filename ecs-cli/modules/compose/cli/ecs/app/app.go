@@ -14,6 +14,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -70,6 +71,7 @@ func ProjectStart(p ecscompose.Project, c *cli.Context) {
 
 // ProjectUp brings all containers up.
 func ProjectUp(p ecscompose.Project, c *cli.Context) {
+	fmt.Println("app.go - ProjectUp")
 	err := p.Up()
 	if err != nil {
 		log.Fatal(err)

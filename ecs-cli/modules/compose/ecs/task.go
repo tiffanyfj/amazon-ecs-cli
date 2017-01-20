@@ -14,6 +14,8 @@
 package ecs
 
 import (
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	composeutils "github.com/aws/amazon-ecs-cli/ecs-cli/modules/compose/ecs/utils"
 	"github.com/aws/amazon-ecs-cli/ecs-cli/utils"
@@ -65,6 +67,7 @@ func (t *Task) Sleeper() *utils.TimeSleeper {
 // TaskDefinition returns the task definition object that was created by
 // transforming the Service Configs to ECS acceptable format
 func (t *Task) TaskDefinition() *ecs.TaskDefinition {
+	fmt.Println("task.go - TaskDefinition()")
 	return t.taskDef
 }
 
@@ -79,6 +82,7 @@ func (t *Task) TaskDefinitionCache() cache.Cache {
 // Create creates a task definition in ECS for the containers in the compose file
 // and persists it in a cache locally. It always checks the cache before creating
 func (t *Task) Create() error {
+	fmt.Println("task.go - getOrCreateTaskDefinition")
 	_, err := getOrCreateTaskDefinition(t)
 	return err
 }
@@ -92,6 +96,7 @@ func (t *Task) Start() error {
 // if count of running tasks = 0, starts 1
 // if count != 0, and the task definitions differed, then its stops the old ones and starts the new ones
 func (t *Task) Up() error {
+	fmt.Println("task.go - Up()")
 	return t.up(true)
 }
 
@@ -264,11 +269,14 @@ func (t *Task) createOne() error {
 // if count != 0, and the task definitions differed, then its stops the old ones and starts the new ones
 func (t *Task) up(updateTasks bool) error {
 	ecsTasks, err := collectTasksWithStatus(t, ecs.DesiredStatusRunning, true)
+	fmt.Println("task.go - collectTasksWithStatus")
+	fmt.Println(ecsTasks)
 	if err != nil {
 		return err
 	}
 
 	_, err = getOrCreateTaskDefinition(t)
+	fmt.Println("task.go - getOrCreateTaskDefinition")
 	if err != nil {
 		return err
 	}

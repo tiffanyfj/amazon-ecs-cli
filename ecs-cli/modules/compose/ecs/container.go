@@ -64,6 +64,7 @@ func (c *Container) Name() string {
 // TaskDefinition returns the ECS task definition id which encompasses the container definition, with
 // which this container was created
 func (c *Container) TaskDefinition() string {
+	fmt.Println("container.go - TaskDefinition")
 	return utils.GetIdFromArn(aws.StringValue(c.task.TaskDefinitionArn))
 }
 

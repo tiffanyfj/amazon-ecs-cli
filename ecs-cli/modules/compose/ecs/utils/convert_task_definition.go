@@ -47,6 +47,7 @@ var supportedComposeYamlOptions = []string{
 }
 
 var supportedComposeYamlOptionsMap = getSupportedComposeYamlOptionsMap()
+var debug = true
 
 func getSupportedComposeYamlOptionsMap() map[string]bool {
 	optionsMap := make(map[string]bool)
@@ -67,7 +68,7 @@ func ConvertToTaskDefinition(taskDefinitionName string, context *project.Context
 	logUnsupportedConfigFields(context.Project)
 
 	containerDefinitions := []*ecs.ContainerDefinition{}
-	volumes := make(map[string]string) // map with key:=hostSourcePath value:=VolumeName
+	volumes := make(map[string][]string) // map with key:=hostSourcePath value:=[]VolumeNames
 
 	for _, name := range serviceConfigs.Keys() {
 		serviceConfig, ok := serviceConfigs.Get(name)
@@ -81,12 +82,19 @@ func ConvertToTaskDefinition(taskDefinitionName string, context *project.Context
 		if err := convertToContainerDef(context, serviceConfig, volumes, containerDef); err != nil {
 			return nil, err
 		}
+		if debug {
+			fmt.Println("ConvertToTaskDefinition - volumes ", volumes)
+		}
 		containerDefinitions = append(containerDefinitions, containerDef)
+	}
+	ecsVolumes, err := convertToECSVolumes(volumes)
+	if err != nil {
+		return nil, err
 	}
 	taskDefinition := &ecs.TaskDefinition{
 		Family:               aws.String(taskDefinitionName),
 		ContainerDefinitions: containerDefinitions,
-		Volumes:              convertToECSVolumes(volumes),
+		Volumes:              ecsVolumes,
 	}
 	return taskDefinition, nil
 }
@@ -156,7 +164,10 @@ func isZero(v reflect.Value) bool {
 // convertToContainerDef transforms each service in the compose yml
 // to an equivalent container definition
 func convertToContainerDef(context *project.Context, inputCfg *config.ServiceConfig,
-	volumes map[string]string, outputContDef *ecs.ContainerDefinition) error {
+	volumes map[string][]string, outputContDef *ecs.ContainerDefinition) error {
+	if debug {
+		fmt.Println("convertToContainerDef - volumes ", volumes)
+	}
 	// setting memory
 	var mem int64
 	if inputCfg.MemLimit != 0 {
@@ -182,9 +193,15 @@ func convertToContainerDef(context *project.Context, inputCfg *config.ServiceCon
 	}
 
 	// convert mount points
+	if debug {
+		fmt.Println("pre convertToMountPoints - volumes ", volumes)
+	}
 	mountPoints, err := convertToMountPoints(inputCfg.Volumes, volumes)
 	if err != nil {
 		return err
+	}
+	if debug {
+		fmt.Println("post convertToMountPoints - volumes ", volumes)
 	}
 
 	// convert extra hosts
@@ -287,18 +304,33 @@ func createKeyValuePair(key, value string) *ecs.KeyValuePair {
 }
 
 // convertToECSVolumes transforms the map of hostPaths to the format of ecs.Volume
-func convertToECSVolumes(hostPaths map[string]string) []*ecs.Volume {
+func convertToECSVolumes(hostPaths map[string][]string) ([]*ecs.Volume, error) {
 	output := []*ecs.Volume{}
-	for hostPath, volName := range hostPaths {
-		ecsVolume := &ecs.Volume{
-			Name: aws.String(volName),
-			Host: &ecs.HostVolumeProperties{
-				SourcePath: aws.String(hostPath),
-			},
+	for hostPath, volNames := range hostPaths {
+		if debug {
+			fmt.Println("convert_task_definitions.go - convertToECSVolumes ", hostPath, volNames)
 		}
-		output = append(output, ecsVolume)
+		if hostPath == "" {
+			for i := range volNames {
+				ecsVolume := &ecs.Volume{
+					Name: aws.String(volNames[i]),
+				}
+				output = append(output, ecsVolume)
+			}
+		} else {
+			if len(volNames) != 1 {
+				return nil, fmt.Errorf("Expected one volume name, but found %v", len(volNames))
+			}
+			ecsVolume := &ecs.Volume{
+				Name: aws.String(volNames[0]),
+				Host: &ecs.HostVolumeProperties{
+					SourcePath: aws.String(hostPath),
+				},
+			}
+			output = append(output, ecsVolume)
+		}
 	}
-	return output
+	return output, nil
 }
 
 // convertToPortMappings transforms the yml ports string slice to ecs compatible PortMappings slice
@@ -367,6 +399,7 @@ func convertToVolumesFrom(cfgVolumesFrom []string) ([]*ecs.VolumeFrom, error) {
 	volumesFrom := []*ecs.VolumeFrom{}
 
 	for _, cfgVolumeFrom := range cfgVolumesFrom {
+		fmt.Println("convert_task_definition.go - convertToVolumesFrom: ", cfgVolumeFrom)
 		parts := strings.Split(cfgVolumeFrom, ":")
 
 		var containerName, accessModeStr string
@@ -419,15 +452,19 @@ func convertToVolumesFrom(cfgVolumesFrom []string) ([]*ecs.VolumeFrom, error) {
 
 // convertToMountPoints transforms the yml volumes slice to ecs compatible MountPoints slice
 // It also uses the hostPath from volumes if present, else adds one to it
-func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string]string) ([]*ecs.MountPoint, error) {
+func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string][]string) ([]*ecs.MountPoint, error) {
 	mountPoints := []*ecs.MountPoint{}
 	if cfgVolumes == nil {
 		return mountPoints, nil
 	}
 	for _, cfgVolume := range cfgVolumes.Volumes {
 		hostPath := cfgVolume.Source
+		fmt.Println("hostPath ", hostPath)
+		// if hostPath == "" {
+		// 	hostPath = cfgVolume.Destination
+		// }
 		containerPath := cfgVolume.Destination
-
+		fmt.Println("containerPath ", containerPath)
 		accessMode := cfgVolume.AccessMode
 		var readOnly bool
 		if accessMode != "" {
@@ -442,13 +479,41 @@ func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string]string) (
 		}
 
 		var volumeName string
-		if len(volumes) > 0 {
-			volumeName = volumes[hostPath]
+		if len(volumes) > 0 && hostPath != "" {
+			if debug {
+				fmt.Println("----")
+				fmt.Println("1 convertToMountPoints - len(volumes)>0")
+				fmt.Println("1 volumes ", volumes)
+			}
+			if len(volumes[hostPath]) > 0 {
+				volumeName = volumes[hostPath][0]
+			} else {
+				volumeName = ""
+			}
+			if debug {
+				fmt.Println("1volumeName ", volumeName)
+				fmt.Println("----")
+			}
 		}
 
-		if volumeName == "" {
-			volumeName = getVolumeName(len(volumes))
-			volumes[hostPath] = volumeName
+		if volumeName == "" || hostPath == "" {
+			if debug {
+				fmt.Println("====")
+				fmt.Println("convertToMountPoints - getVolumeName ", len(volumes))
+				fmt.Println("2 volumes ", volumes)
+			}
+			numVol := len(volumes)
+			if len(volumes[""]) > 0 {
+				numVol += len(volumes[""]) - 1
+			}
+			volumeName = getVolumeName(numVol)
+			if debug {
+				fmt.Println("2volumeName ", volumeName)
+			}
+			volumes[hostPath] = append(volumes[hostPath], volumeName)
+			if debug {
+				fmt.Println("====")
+			}
 		}
 
 		mountPoints = append(mountPoints, &ecs.MountPoint{

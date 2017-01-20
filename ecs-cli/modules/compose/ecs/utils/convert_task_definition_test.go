@@ -352,10 +352,12 @@ func TestConvertToMountPoints(t *testing.T) {
 	onlyContainerPath := yaml.Volume{Destination: containerPath}
 	hostAndContainerPath := yaml.Volume{Source: hostPath, Destination: containerPath}                         // "./cache:/tmp/cache"
 	hostAndContainerPathWithRO := yaml.Volume{Source: hostPath, Destination: containerPath, AccessMode: "ro"} // "./cache:/tmp/cache:ro"
+	// onlyContainerPathWithRO := yaml.Volume{Destination: containerPath, AccessMode: "ro"}                      // "./cache:/tmp/cache:ro"
 	hostAndContainerPathWithRW := yaml.Volume{Source: hostPath, Destination: containerPath, AccessMode: "rw"}
 
-	volumes := make(map[string]string)
+	volumes := make(map[string][]string)
 
+	// Valid inputs with host and container paths set
 	mountPointsIn := yaml.Volumes{Volumes: []*yaml.Volume{&onlyContainerPath, &hostAndContainerPath,
 		&hostAndContainerPathWithRO, &hostAndContainerPathWithRW}}
 
@@ -366,11 +368,15 @@ func TestConvertToMountPoints(t *testing.T) {
 	if len(mountPointsIn.Volumes) != len(mountPointsOut) {
 		t.Errorf("Incorrect conversion. Input [%v] Output [%v]", mountPointsIn, mountPointsOut)
 	}
-	verifyMountPoint(t, mountPointsOut[0], volumes, "", containerPath, false)
+	fmt.Println(mountPointsOut)
+	fmt.Println("volumes ", volumes)
+	verifyMountPoint(t, mountPointsOut[0], volumes, hostPath, containerPath, false)
 	verifyMountPoint(t, mountPointsOut[1], volumes, hostPath, containerPath, false)
 	verifyMountPoint(t, mountPointsOut[2], volumes, hostPath, containerPath, true)
 	verifyMountPoint(t, mountPointsOut[3], volumes, hostPath, containerPath, false)
+	// verifyMountPoint(t, mountPointsOut[4], volumes, hostPath, containerPath, false)
 
+	// Invalid access mode input
 	hostAndContainerPathWithIncorrectAccess := yaml.Volume{Source: hostPath, Destination: containerPath, AccessMode: "readonly"}
 	mountPointsIn = yaml.Volumes{Volumes: []*yaml.Volume{&hostAndContainerPathWithIncorrectAccess}}
 	mountPointsOut, err = convertToMountPoints(&mountPointsIn, volumes)
@@ -387,13 +393,14 @@ func TestConvertToMountPoints(t *testing.T) {
 	}
 }
 
-func verifyMountPoint(t *testing.T, output *ecs.MountPoint, volumes map[string]string,
+func verifyMountPoint(t *testing.T, output *ecs.MountPoint, volumes map[string][]string,
 	hostPath, containerPath string, readonly bool) {
 
 	if containerPath != *output.ContainerPath {
 		t.Errorf("Expected containerPath [%s] But was [%s]", containerPath, *output.ContainerPath)
 	}
-	sourceVolume := volumes[hostPath]
+	fmt.Println(hostPath, volumes)
+	sourceVolume := volumes[hostPath][0]
 	if sourceVolume != *output.SourceVolume {
 		t.Errorf("Expected sourceVolume [%s] But was [%s]", sourceVolume, *output.SourceVolume)
 	}
