@@ -67,7 +67,7 @@ func ConvertToTaskDefinition(taskDefinitionName string, context *project.Context
 	logUnsupportedConfigFields(context.Project)
 
 	containerDefinitions := []*ecs.ContainerDefinition{}
-	volumes := make(map[string]string) // map with key:=hostSourcePath value:=VolumeName
+	volumes := make(map[string][]string) // map with key:=hostSourcePath value:=[]VolumeNames
 
 	for _, name := range serviceConfigs.Keys() {
 		serviceConfig, ok := serviceConfigs.Get(name)
@@ -83,10 +83,14 @@ func ConvertToTaskDefinition(taskDefinitionName string, context *project.Context
 		}
 		containerDefinitions = append(containerDefinitions, containerDef)
 	}
+	ecsVolumes, err := convertToECSVolumes(volumes)
+	if err != nil {
+		return nil, err
+	}
 	taskDefinition := &ecs.TaskDefinition{
 		Family:               aws.String(taskDefinitionName),
 		ContainerDefinitions: containerDefinitions,
-		Volumes:              convertToECSVolumes(volumes),
+		Volumes:              ecsVolumes,
 	}
 	return taskDefinition, nil
 }
@@ -156,7 +160,7 @@ func isZero(v reflect.Value) bool {
 // convertToContainerDef transforms each service in the compose yml
 // to an equivalent container definition
 func convertToContainerDef(context *project.Context, inputCfg *config.ServiceConfig,
-	volumes map[string]string, outputContDef *ecs.ContainerDefinition) error {
+	volumes map[string][]string, outputContDef *ecs.ContainerDefinition) error {
 	// setting memory
 	var mem int64
 	if inputCfg.MemLimit != 0 {
@@ -288,17 +292,22 @@ func createKeyValuePair(key, value string) *ecs.KeyValuePair {
 }
 
 // convertToECSVolumes transforms the map of hostPaths to the format of ecs.Volume
-func convertToECSVolumes(hostPaths map[string]string) []*ecs.Volume {
+func convertToECSVolumes(hostPaths map[string][]string) ([]*ecs.Volume, error) {
 	output := []*ecs.Volume{}
-	for hostPath, volName := range hostPaths {
+	for hostPath, volNames := range hostPaths {
 		if hostPath == "" {
-			ecsVolume := &ecs.Volume{
-				Name: aws.String(volName),
+			for i := range volNames {
+				ecsVolume := &ecs.Volume{
+					Name: aws.String(volNames[i]),
+				}
+				output = append(output, ecsVolume)
 			}
-			output = append(output, ecsVolume)
 		} else {
+			if len(volNames) != 1 {
+				return nil, fmt.Errorf("Expected one volume name, but found %v", len(volNames))
+			}
 			ecsVolume := &ecs.Volume{
-				Name: aws.String(volName),
+				Name: aws.String(volNames[0]),
 				Host: &ecs.HostVolumeProperties{
 					SourcePath: aws.String(hostPath),
 				},
@@ -306,7 +315,7 @@ func convertToECSVolumes(hostPaths map[string]string) []*ecs.Volume {
 			output = append(output, ecsVolume)
 		}
 	}
-	return output
+	return output, nil
 }
 
 // convertToPortMappings transforms the yml ports string slice to ecs compatible PortMappings slice
@@ -427,7 +436,7 @@ func convertToVolumesFrom(cfgVolumesFrom []string) ([]*ecs.VolumeFrom, error) {
 
 // convertToMountPoints transforms the yml volumes slice to ecs compatible MountPoints slice
 // It also uses the hostPath from volumes if present, else adds one to it
-func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string]string) ([]*ecs.MountPoint, error) {
+func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string][]string) ([]*ecs.MountPoint, error) {
 	mountPoints := []*ecs.MountPoint{}
 	if cfgVolumes == nil {
 		return mountPoints, nil
@@ -450,13 +459,21 @@ func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string]string) (
 		}
 
 		var volumeName string
-		if len(volumes) > 0 {
-			volumeName = volumes[hostPath]
+		numVol := len(volumes)
+		if numVol > 0 && hostPath != "" {
+			if _, ok := volumes[hostPath]; ok {
+				volumeName = volumes[hostPath][0]
+			} else {
+				volumeName = ""
+			}
 		}
 
-		if volumeName == "" {
-			volumeName = getVolumeName(len(volumes))
-			volumes[hostPath] = volumeName
+		if volumeName == "" || hostPath == "" {
+			if _, ok := volumes[""]; ok {
+				numVol += len(volumes[""]) - 1
+			}
+			volumeName = getVolumeName(numVol)
+			volumes[hostPath] = append(volumes[hostPath], volumeName)
 		}
 
 		mountPoints = append(mountPoints, &ecs.MountPoint{
