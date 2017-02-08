@@ -359,7 +359,9 @@ func TestConvertToMountPoints(t *testing.T) {
 	hostAndContainerPathWithRO := yaml.Volume{Source: hostPath, Destination: containerPath, AccessMode: "ro"} // "./cache:/tmp/cache:ro"
 	hostAndContainerPathWithRW := yaml.Volume{Source: hostPath, Destination: containerPath, AccessMode: "rw"}
 
-	volumes := make(map[string][]string)
+	volumes := &volumes{
+		volumeHasHost: make(map[string]string), // map with key:=hostSourcePath value:=VolumeName
+	}
 
 	// Valid inputs with host and container paths set
 	mountPointsIn := yaml.Volumes{Volumes: []*yaml.Volume{&onlyContainerPath, &onlyContainerPath2, &hostAndContainerPath,
@@ -404,19 +406,17 @@ func TestConvertToMountPoints(t *testing.T) {
 	}
 }
 
-func verifyMountPoint(t *testing.T, output *ecs.MountPoint, volumes map[string][]string,
+func verifyMountPoint(t *testing.T, output *ecs.MountPoint, volumes *volumes,
 	hostPath, containerPath string, readonly bool) {
 	sourceVolume := ""
 	if containerPath != *output.ContainerPath {
 		t.Errorf("Expected containerPath [%s] But was [%s]", containerPath, *output.ContainerPath)
 	}
 	if hostPath != "" {
-		sourceVolume = volumes[hostPath][0]
+		sourceVolume = volumes.volumeHasHost[hostPath]
 	} else {
-		sourceVolume = volumes[hostPath][emptyHostCtr]
-		if emptyHostCtr < len(volumes[hostPath])-1 {
-			emptyHostCtr++
-		}
+		sourceVolume = volumes.volumeEmptyHost[emptyHostCtr]
+		emptyHostCtr++
 	}
 	if sourceVolume != *output.SourceVolume {
 		t.Errorf("Expected sourceVolume [%s] But was [%s]", sourceVolume, *output.SourceVolume)
