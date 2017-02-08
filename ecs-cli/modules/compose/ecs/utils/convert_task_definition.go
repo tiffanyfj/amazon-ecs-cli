@@ -48,6 +48,11 @@ var supportedComposeYamlOptions = []string{
 
 var supportedComposeYamlOptionsMap = getSupportedComposeYamlOptionsMap()
 
+type volumes struct {
+	volumeHasHost   map[string]string
+	volumeEmptyHost []string
+}
+
 func getSupportedComposeYamlOptionsMap() map[string]bool {
 	optionsMap := make(map[string]bool)
 	for _, value := range supportedComposeYamlOptions {
@@ -67,7 +72,9 @@ func ConvertToTaskDefinition(taskDefinitionName string, context *project.Context
 	logUnsupportedConfigFields(context.Project)
 
 	containerDefinitions := []*ecs.ContainerDefinition{}
-	volumes := make(map[string]string) // map with key:=hostSourcePath value:=VolumeName
+	volumes := &volumes{
+		volumeHasHost: make(map[string]string), // map with key:=hostSourcePath value:=VolumeName
+	}
 
 	for _, name := range serviceConfigs.Keys() {
 		serviceConfig, ok := serviceConfigs.Get(name)
@@ -83,6 +90,7 @@ func ConvertToTaskDefinition(taskDefinitionName string, context *project.Context
 		}
 		containerDefinitions = append(containerDefinitions, containerDef)
 	}
+
 	taskDefinition := &ecs.TaskDefinition{
 		Family:               aws.String(taskDefinitionName),
 		ContainerDefinitions: containerDefinitions,
@@ -156,7 +164,7 @@ func isZero(v reflect.Value) bool {
 // convertToContainerDef transforms each service in the compose yml
 // to an equivalent container definition
 func convertToContainerDef(context *project.Context, inputCfg *config.ServiceConfig,
-	volumes map[string]string, outputContDef *ecs.ContainerDefinition) error {
+	volumes *volumes, outputContDef *ecs.ContainerDefinition) error {
 	// setting memory
 	var mem int64
 	if inputCfg.MemLimit != 0 {
@@ -288,14 +296,21 @@ func createKeyValuePair(key, value string) *ecs.KeyValuePair {
 }
 
 // convertToECSVolumes transforms the map of hostPaths to the format of ecs.Volume
-func convertToECSVolumes(hostPaths map[string]string) []*ecs.Volume {
+func convertToECSVolumes(hostPaths *volumes) []*ecs.Volume {
 	output := []*ecs.Volume{}
-	for hostPath, volName := range hostPaths {
+	// volumes with a host path
+	for hostPath, volName := range hostPaths.volumeHasHost {
 		ecsVolume := &ecs.Volume{
 			Name: aws.String(volName),
 			Host: &ecs.HostVolumeProperties{
 				SourcePath: aws.String(hostPath),
-			},
+			}}
+		output = append(output, ecsVolume)
+	}
+	// volumes with an empty host path
+	for _, volName := range hostPaths.volumeEmptyHost {
+		ecsVolume := &ecs.Volume{
+			Name: aws.String(volName),
 		}
 		output = append(output, ecsVolume)
 	}
@@ -420,7 +435,7 @@ func convertToVolumesFrom(cfgVolumesFrom []string) ([]*ecs.VolumeFrom, error) {
 
 // convertToMountPoints transforms the yml volumes slice to ecs compatible MountPoints slice
 // It also uses the hostPath from volumes if present, else adds one to it
-func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string]string) ([]*ecs.MountPoint, error) {
+func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes *volumes) ([]*ecs.MountPoint, error) {
 	mountPoints := []*ecs.MountPoint{}
 	if cfgVolumes == nil {
 		return mountPoints, nil
@@ -443,13 +458,23 @@ func convertToMountPoints(cfgVolumes *yaml.Volumes, volumes map[string]string) (
 		}
 
 		var volumeName string
-		if len(volumes) > 0 {
-			volumeName = volumes[hostPath]
-		}
+		numVol := len(volumes.volumeHasHost) + len(volumes.volumeEmptyHost)
+		if hostPath == "" {
+			volumeName = getVolumeName(numVol)
+			volumes.volumeEmptyHost = append(volumes.volumeEmptyHost, volumeName)
+		} else {
+			if len(volumes.volumeHasHost) > 0 {
+				if len(volumes.volumeHasHost[hostPath]) > 0 {
+					volumeName = volumes.volumeHasHost[hostPath]
+				} else {
+					volumeName = ""
+				}
+			}
 
-		if volumeName == "" {
-			volumeName = getVolumeName(len(volumes))
-			volumes[hostPath] = volumeName
+			if volumeName == "" {
+				volumeName = getVolumeName(numVol)
+				volumes.volumeHasHost[hostPath] = volumeName
+			}
 		}
 
 		mountPoints = append(mountPoints, &ecs.MountPoint{
