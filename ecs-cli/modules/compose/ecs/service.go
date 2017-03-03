@@ -268,7 +268,7 @@ func (s *Service) Down() error {
 	return waitForServiceTasks(s, ecsServiceName)
 }
 
-// Run expects to issue a command override and start containers. But that doesnt apply to the context of ECS Services
+// Run expects to issue a command override and start containers. But that doesn't apply to the context of ECS Services
 func (s *Service) Run(commandOverrides map[string]string) error {
 	return composeutils.ErrUnsupported
 }
@@ -288,6 +288,7 @@ func (s *Service) createService() error {
 
 // describeService calls underlying ECS.DescribeService and expects the service to be present,
 // returns error otherwise
+
 func (s *Service) describeService() (*ecs.Service, error) {
 	serviceName := s.getServiceName()
 	output, err := s.Context().ECSClient.DescribeService(serviceName)

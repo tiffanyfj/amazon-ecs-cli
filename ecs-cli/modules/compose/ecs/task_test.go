@@ -40,8 +40,8 @@ func TestTaskCreate(t *testing.T) {
 	respTaskDef := taskDefinition
 	respTaskDef.TaskDefinitionArn = aws.String("taskDefinitionArn")
 
-	mockEcs := mock_ecs.NewMockECSClient(ctrl)
-	mockEcs.EXPECT().RegisterTaskDefinitionIfNeeded(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
+	mocksECS := mock_ecs.NewMockECSClient(ctrl)
+	mocksECS.EXPECT().RegisterTaskDefinitionIfNeeded(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
 		// verify input fields
 		req := x.(*ecs.RegisterTaskDefinitionInput)
 		if aws.StringValue(taskDefinition.Family) != aws.StringValue(req.Family) {
@@ -51,7 +51,7 @@ func TestTaskCreate(t *testing.T) {
 	}).Return(&respTaskDef, nil)
 
 	context := &Context{
-		ECSClient: mockEcs,
+		ECSClient: mocksECS,
 		ECSParams: &config.CliParams{},
 	}
 	task := NewTask(context)
@@ -122,12 +122,12 @@ func testInfo(setupEntity setupEntityForTestInfo, validateFunc validateListTasks
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockEcs := mock_ecs.NewMockECSClient(ctrl)
+	mocksECS := mock_ecs.NewMockECSClient(ctrl)
 	mockEc2 := mock_ec2.NewMockEC2Client(ctrl)
 
 	gomock.InOrder(
 
-		mockEcs.EXPECT().GetTasksPages(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
+		mocksECS.EXPECT().GetTasksPages(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
 			// verify input fields
 			req := x.(*ecs.ListTasksInput)
 			validateFunc(req, projectName, t)
@@ -139,7 +139,7 @@ func testInfo(setupEntity setupEntityForTestInfo, validateFunc validateListTasks
 			funct := y.(ecsClient.ProcessTasksAction)
 			funct(runningTasks)
 		}).Return(nil),
-		mockEcs.EXPECT().GetTasksPages(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
+		mocksECS.EXPECT().GetTasksPages(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
 			// verify input fields
 			req := x.(*ecs.ListTasksInput)
 			validateFunc(req, projectName, t)
@@ -151,12 +151,12 @@ func testInfo(setupEntity setupEntityForTestInfo, validateFunc validateListTasks
 			funct := y.(ecsClient.ProcessTasksAction)
 			funct(stoppedTasks)
 		}).Return(nil),
-		mockEcs.EXPECT().GetEC2InstanceIDs([]*string{&containerInstance}).Return(instanceIdsMap, nil),
+		mocksECS.EXPECT().GetEC2InstanceIDs([]*string{&containerInstance}).Return(instanceIdsMap, nil),
 		mockEc2.EXPECT().DescribeInstances([]*string{&ec2InstanceId}).Return(ec2InstancesMap, nil),
 	)
 
 	context := &Context{
-		ECSClient: mockEcs,
+		ECSClient: mocksECS,
 		EC2Client: mockEc2,
 		ECSParams: &config.CliParams{},
 		Context: project.Context{

@@ -89,9 +89,9 @@ func createServiceTest(t *testing.T, cliContext *cli.Context, validateDeployment
 	respTaskDef := taskDefinition
 	respTaskDef.TaskDefinitionArn = aws.String(taskDefArn)
 
-	mockEcs := mock_ecs.NewMockECSClient(ctrl)
+	mockECS := mock_ecs.NewMockECSClient(ctrl)
 	gomock.InOrder(
-		mockEcs.EXPECT().RegisterTaskDefinitionIfNeeded(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
+		mockECS.EXPECT().RegisterTaskDefinitionIfNeeded(gomock.Any(), gomock.Any()).Do(func(x, y interface{}) {
 			// verify input fields
 			req := x.(*ecs.RegisterTaskDefinitionInput)
 			if aws.StringValue(taskDefinition.Family) != aws.StringValue(req.Family) {
@@ -99,7 +99,7 @@ func createServiceTest(t *testing.T, cliContext *cli.Context, validateDeployment
 					aws.StringValue(taskDefinition.Family), aws.StringValue(req.Family))
 			}
 		}).Return(&respTaskDef, nil),
-		mockEcs.EXPECT().CreateService(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(x, y, z interface{}) {
+		mockECS.EXPECT().CreateService(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(x, y, z interface{}) {
 			observedTaskDefId := y.(string)
 			if taskDefId != observedTaskDefId {
 				t.Errorf("Expected task definition name to be [%s] but got [%s]", taskDefId, observedTaskDefId)
@@ -110,7 +110,7 @@ func createServiceTest(t *testing.T, cliContext *cli.Context, validateDeployment
 	)
 
 	context := &Context{
-		ECSClient:  mockEcs,
+		ECSClient:  mockECS,
 		ECSParams:  &config.CliParams{},
 		CLIContext: cliContext,
 	}

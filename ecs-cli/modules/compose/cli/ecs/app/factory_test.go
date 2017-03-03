@@ -67,12 +67,12 @@ func TestLoadProject(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockEcsProject := mock_ecs.NewMockProject(ctrl)
+	mockECSProject := mock_ecs.NewMockProject(ctrl)
 	var expectedErr error
-	mockEcsProject.EXPECT().Parse().Return(expectedErr)
+	mockECSProject.EXPECT().Parse().Return(expectedErr)
 
 	projectFactory := projectFactory{}
-	observedErr := projectFactory.loadProject(mockEcsProject)
+	observedErr := projectFactory.loadProject(mockECSProject)
 
 	if expectedErr != observedErr {
 		t.Errorf("LoadProject should mimic what Project.Parse returns. Unexpected error [%s] was thrown", observedErr)
